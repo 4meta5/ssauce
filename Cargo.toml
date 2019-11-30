@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "modules/scheduler",
+    "modules/tax",
+    # "runtimes/main",
+    # "runtimes/genesis",
+]
