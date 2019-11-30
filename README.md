@@ -6,9 +6,3 @@ Inspired by the [srml-tour](https://github.com/JoshOrndorff/srml-tour), the `sau
 * [task-scheduler](./module/scheduler)
 
 *It is intended to be thoroughly tested and, eventually, benchmarked.*
-<!-- ## next
-
-* poison-panics (srml-panic)
-* crowdfund
-* derivative
- -->
