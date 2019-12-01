@@ -9,6 +9,7 @@ serde = { version = "1.0", optional = true, features = ["derive"] }
 safe-mix = { version = "1.0", default-features = false }
 task-scheduler = { package = "task-scheduler", path = "../../modules/scheduler", default-features = false }
 transfer-tax = { package = "transfer-tax", path = "../../modules/tax", default-features = false }
+vote = { package = "vote", path = "../../modules/vote", default-features = false }
 
 [dependencies.parity-scale-codec]
 default-features = false

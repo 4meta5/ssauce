@@ -30,6 +30,7 @@ use version::RuntimeVersion;
 // The Recipe Modules
 use task_scheduler;
 use transfer_tax;
+use vote;
 
 // A few exports that help ease life for downstream crates.
 pub use balances::Call as BalancesCall;
