@@ -5,8 +5,8 @@ authors = ["Anonymous"]
 edition = "2018"
 
 [dependencies.runtime]
-package = 'runtime'
-path = '../runtime'
+package = 'main'
+path = '../main'
 
 [dependencies]
 babe-primitives = { package = "substrate-consensus-babe-primitives", git = "https://github.com/paritytech/substrate", rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e' }

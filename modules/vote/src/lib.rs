@@ -1,12 +1,17 @@
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use runtime_primitives::traits::{Hash, SimpleArithmetic, Dispatchable, MaybeSerializeDeserialize, EnsureOrigin};
+use runtime_primitives::{
+    RuntimeDebug, 
+    traits::{Hash, SimpleArithmetic, Dispatchable, MaybeSerializeDeserialize, EnsureOrigin},
+};
 use support::{
     decl_event, decl_module, decl_storage,
     ensure, StorageMap, StorageValue, Parameter,
+    traits::{Currency, ReservableCurrency, Get, ChangeMembers, InitializeMembers},
 };
-use parity_scale_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode, FullCodec};
+use rstd::{prelude::*, fmt::Debug};
 use system::{self, ensure_signed};
 
 pub trait Trait: system::Trait {
@@ -26,4 +31,41 @@ pub trait Trait: system::Trait {
     type WeightOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
     /// The period for which votes are counted
     type VotePeriod: Get<Self::BlockNumber>;
+}
+
+// TODO
+// - create a few election structures
+// - create traits for them (abstract shared behavior and move everything to trait objects)
+
+#[derive(Encode, Decode, RuntimeDebug)]
+pub struct SimpleTally;
+
+decl_storage! {
+    trait Store for Module<T: Trait> as Vote {
+        /// Track user debt (to prevent excessive requests beyond means)
+        TallyVotes get(fn tally_votes): map T::AccountId => Option<SimpleTally>;
+    }
+}
+
+decl_event!(
+    pub enum Event<T>
+    where 
+        <T as system::Trait>::AccountId
+    {
+        NullEvent(AccountId),
+    }
+);
+
+decl_module! {
+    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+        fn deposit_event() = default;
+
+        fn on_finalize(n: T::BlockNumber) {
+            let fake = 6u64;
+        }
+    }
+}
+
+impl<T: Trait> Module<T> {
+    // use origins
 }

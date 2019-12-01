@@ -23,6 +23,7 @@ use sr_primitives::{
     create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
     AnySignature, ApplyResult,
 };
+use system::EnsureSignedBy;
 #[cfg(feature = "std")]
 use version::NativeVersion;
 use version::RuntimeVersion;
@@ -280,6 +281,30 @@ impl transfer_tax::Trait for Runtime {
     type TreasurySpend = PeriodLength;
     type MinimumProposalAge = SmallAmount;
 }
+parameter_types!{
+    pub const VotePeriod: u64 = 10;
+    // origis (after democracy)
+    pub const One: u64 = 1;
+    pub const Two: u64 = 2;
+    pub const Three: u64 = 3;
+}
+pub struct OneToFive;
+impl Contains<u64> for OneToFive {
+    fn contains(n: &u64) -> bool {
+        *n >= 1 && *n <= 5
+    }
+}
+
+impl vote::Trait for Runtime {
+    type Event = Event;
+    type Currency = balances::Module<Runtime>;
+    type Proposal = Call;
+    type Signal = u64;
+    type MajorityCarries = EnsureSignedBy<One, u64>;
+    type CancellationOrigin = EnsureSignedBy<Two, u64>;
+    type WeightOrigin = EnsureSignedBy<Three, u64>;
+    type VotePeriod = VotePeriod; 
+}
 
 construct_runtime!(
 	pub enum Runtime where
@@ -298,7 +323,8 @@ construct_runtime!(
 		TransactionPayment: transaction_payment::{Module, Storage},
 		// Sauce Modules
 		TaskScheduler: task_scheduler::{Module, Call, Storage, Event<T>},
-		TransferTax: transfer_tax::{Module, Call, Storage, Event<T>},
+        TransferTax: transfer_tax::{Module, Call, Storage, Event<T>},
+        Vote: vote::{Module, Call, Storage, Event<T>},
 	}
 );
 
