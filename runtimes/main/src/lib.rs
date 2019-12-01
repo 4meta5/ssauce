@@ -260,7 +260,7 @@ impl transaction_payment::Trait for Runtime {
 }
 
 // sauce module impls
-parameter_types!{
+parameter_types! {
     pub const PeriodLength: u32 = 10;
     pub const SmallAmount: u32 = 3;
     pub const LargeAmount: u32 = 20;
@@ -281,7 +281,7 @@ impl transfer_tax::Trait for Runtime {
     type TreasurySpend = PeriodLength;
     type MinimumProposalAge = SmallAmount;
 }
-parameter_types!{
+parameter_types! {
     pub const VotePeriod: u32 = 10;
     pub const MajorityOrigin: u64 = 1;
     pub const CancellationOrigin: u64 = 2;
@@ -297,7 +297,7 @@ impl vote::Trait for Runtime {
     type WeightOrigin = EnsureSignedBy<WeightOrigin, u64>;
     type VotePeriod = VotePeriod;
 }
-use system::{RawOrigin, Origin};
+use system::{Origin, RawOrigin};
 impl From<RawOrigin<u64>> for ::Origin {
     fn from(o: RawOrigin<u64>) -> Self {
         match o {

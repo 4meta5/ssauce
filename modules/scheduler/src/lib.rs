@@ -491,11 +491,8 @@ mod tests {
                 assert_eq!(TaskScheduler::execution_queue(), vec![new_task.clone()]);
 
                 // check event behavior
-                let expected_event = TestEvent::task_scheduler(RawEvent::TaskScheduled(
-                    first_account,
-                    new_task,
-                    10,
-                ));
+                let expected_event =
+                    TestEvent::task_scheduler(RawEvent::TaskScheduled(first_account, new_task, 10));
                 assert!(System::events().iter().any(|a| a.event == expected_event));
             })
     }
@@ -520,11 +517,7 @@ mod tests {
 
                 TaskScheduler::schedule_task(Origin::signed(2), new_task.clone());
 
-                TaskScheduler::signal_priority(
-                    Origin::signed(1),
-                    new_task.clone(),
-                    0u32.into(),
-                );
+                TaskScheduler::signal_priority(Origin::signed(1), new_task.clone(), 0u32.into());
 
                 // check storage changes
                 assert_eq!(
