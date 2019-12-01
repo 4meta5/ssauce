@@ -261,7 +261,7 @@ impl transaction_payment::Trait for Runtime {
 
 // sauce module impls
 parameter_types!{
-    pub const PeriodLength: u64 = 10;
+    pub const PeriodLength: u32 = 10;
     pub const SmallAmount: u32 = 3;
     pub const LargeAmount: u32 = 20;
 }
@@ -282,28 +282,30 @@ impl transfer_tax::Trait for Runtime {
     type MinimumProposalAge = SmallAmount;
 }
 parameter_types!{
-    pub const VotePeriod: u64 = 10;
-    // origis (after democracy)
-    pub const One: u64 = 1;
-    pub const Two: u64 = 2;
-    pub const Three: u64 = 3;
+    pub const VotePeriod: u32 = 10;
+    pub const MajorityOrigin: u64 = 1;
+    pub const CancellationOrigin: u64 = 2;
+    pub const WeightOrigin: u64 = 3;
 }
-pub struct OneToFive;
-impl Contains<u64> for OneToFive {
-    fn contains(n: &u64) -> bool {
-        *n >= 1 && *n <= 5
-    }
-}
-
 impl vote::Trait for Runtime {
     type Event = Event;
     type Currency = balances::Module<Runtime>;
-    type Proposal = Call;
+    // type Proposal = Call;
     type Signal = u64;
-    type MajorityCarries = EnsureSignedBy<One, u64>;
-    type CancellationOrigin = EnsureSignedBy<Two, u64>;
-    type WeightOrigin = EnsureSignedBy<Three, u64>;
-    type VotePeriod = VotePeriod; 
+    type MajorityOrigin = EnsureSignedBy<MajorityOrigin, u64>;
+    type CancellationOrigin = EnsureSignedBy<CancellationOrigin, u64>;
+    type WeightOrigin = EnsureSignedBy<WeightOrigin, u64>;
+    type VotePeriod = VotePeriod;
+}
+use system::{RawOrigin, Origin};
+impl From<RawOrigin<u64>> for ::Origin {
+    fn from(o: RawOrigin<u64>) -> Self {
+        match o {
+            Some(who) => Origin::signed(who),
+            // this is a forbidden account_id
+            None => Origin::signed(69u64),
+        }
+    }
 }
 
 construct_runtime!(
@@ -347,6 +349,7 @@ pub type SignedExtra = (
     system::CheckWeight<Runtime>,
     transaction_payment::ChargeTransactionPayment<Runtime>,
 );
+
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// Extrinsic type that has already been checked.

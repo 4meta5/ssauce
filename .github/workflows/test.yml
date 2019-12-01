@@ -23,5 +23,5 @@ jobs:
     - uses: actions/checkout@master
       with:
         submodules: recursive
-    - name: Test Kitchen
+    - name: Test Sauce
       run: cd modules && cargo test --all

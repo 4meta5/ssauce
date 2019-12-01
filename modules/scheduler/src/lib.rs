@@ -92,7 +92,7 @@ decl_module! {
         /// - This allows us to start from 0 for all tasks
         fn on_initialize(n: T::BlockNumber) {
             let batch_frequency = T::ExecutionFrequency::get();
-            if (((n - 1.into()) % batch_frequency).is_zero()) {
+            if ((n - 1.into()) % batch_frequency).is_zero() {
                 let last_era = <Era>::get();
                 // clean up the previous double_map with this last_era group index
                 <SignalBank<T>>::remove_prefix(&last_era);
