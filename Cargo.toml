@@ -2,7 +2,9 @@
 members = [
     "modules/scheduler",
     "modules/tax",
+    "modules/poll",
     "modules/vote",
+    "modules/traits",
     "runtimes/main",
     "runtimes/genesis",
 ]

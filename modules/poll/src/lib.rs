@@ -1,18 +1,38 @@
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Poll module: Members of a set of account IDs can make their collective feelings known
+//! through dispatched calls from one of two specialised origins.
+//!
+//! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
+//! function `set_members`, or indirectly, through implementing the `ChangeMembers`
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
 
 use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
-use sr_primitives::RuntimeDebug;
-use sr_primitives::traits::{Hash, EnsureOrigin};
+use runtime_primitives::{RuntimeDebug, traits::{Hash, EnsureOrigin}};
 use support::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
 	decl_storage, ensure,
 };
-use system::{self, ensure_signed, ensure_root}; 
-// idea: write my own macro for `ensure_signed_by_member`
+use system::{self, ensure_signed, ensure_root};
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -361,7 +381,7 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use primitives::H256;
-	use sr_primitives::{
+	use sp_runtime::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
 		BuildStorage,
 	};
@@ -401,8 +421,8 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	support::construct_runtime!(
 		pub enum Test where
@@ -416,7 +436,7 @@ mod tests {
 		}
 	);
 
-	fn make_ext() -> runtime_io::TestExternalities {
+	fn make_ext() -> sp_io::TestExternalities {
 		GenesisConfig {
 			collective_Instance1: Some(collective::GenesisConfig {
 				members: vec![1, 2, 3],

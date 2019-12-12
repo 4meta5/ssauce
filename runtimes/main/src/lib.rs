@@ -297,16 +297,6 @@ impl vote::Trait for Runtime {
     type WeightOrigin = EnsureSignedBy<WeightOrigin, u64>;
     type VotePeriod = VotePeriod;
 }
-use system::{Origin, RawOrigin};
-impl From<RawOrigin<u64>> for ::Origin {
-    fn from(o: RawOrigin<u64>) -> Self {
-        match o {
-            Some(who) => Origin::signed(who),
-            // this is a forbidden account_id
-            None => Origin::signed(69u64),
-        }
-    }
-}
 
 construct_runtime!(
 	pub enum Runtime where
