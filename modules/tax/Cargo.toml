@@ -1,65 +1,34 @@
 [package]
-name = "transfer-tax"
-version = "0.1.0"
+name = "tax"
+version = "0.0.1"
 authors = ["4meta5"]
 edition = "2018"
 
-[features]
-default = ['std']
-std = [
-    'parity-scale-codec/std',
-    'support/std',
-    'system/std',
-    'balances/std',
-    'runtime-primitives/std',
-]
-
 [dependencies]
-serde = "1.0.103"
+serde = { version = "1.0.103", optional = true }
+safe-mix = { version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+primitives = { package = "sp-core", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+support = { package = "frame-support", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+system = { package = "frame-system", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
 
-[dependencies.parity-scale-codec]
-default-features = false
-features = ['derive']
-version = '1.1.0'
+[dev-dependencies]
+hex-literal = "0.2.1"
+balances = { package = "pallet-balances", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
 
-[dependencies.support]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'srml-support'
-rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e'
-
-[dependencies.system]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'srml-system'
-rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e'
-
-[dependencies.balances]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'srml-balances'
-rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e'
-
-[dependencies.runtime-primitives]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'sr-primitives'
-rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e'
-
-[dependencies.rstd]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'sr-std'
-rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e'
-
-[dev-dependencies.primitives]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'substrate-primitives'
-rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e'
-
-[dev-dependencies.runtime-io]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'sr-io'
-rev = '6ae3b6c4ddc03d4cdb10bd1d417b95d20f4c1b6e'
+[features]
+default = ["std"]
+std = [
+	"safe-mix/std",
+	"codec/std",
+	"primitives/std",
+	"sp-std/std",
+	"serde",
+	"sp-io/std",
+	"support/std",
+	"sp-runtime/std",
+	"system/std",
+]

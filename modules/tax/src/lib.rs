@@ -1,9 +1,9 @@
 // not simple treasury
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_scale_codec::{Decode, Encode};
-use rstd::prelude::*;
-use runtime_primitives::{
+use codec::{Decode, Encode};
+use sp_std::prelude::*;
+use sp_runtime::{
     traits::{AccountIdConversion, CheckedAdd, CheckedSub, Zero},
     ModuleId, RuntimeDebug,
 };
@@ -272,8 +272,8 @@ mod tests {
     use crate::*; //{Module, Trait, RawEvent, SpendRequest, GenesisConfig};
     use balances;
     use primitives::H256;
-    use runtime_io;
-    use runtime_primitives::{
+    use sp_io;
+    use sp_runtime::{
         testing::Header,
         traits::{BlakeTwo256, IdentityLookup, OnFinalize},
         Perbill,
@@ -364,7 +364,7 @@ mod tests {
     pub type TransferTax = Module<TestRuntime>;
 
     // An alternative to `ExtBuilder` which includes custom configuration
-    pub fn new_test_ext() -> runtime_io::TestExternalities {
+    pub fn new_test_ext() -> sp_io::TestExternalities {
         let mut t = system::GenesisConfig::default()
             .build_storage::<TestRuntime>()
             .unwrap();

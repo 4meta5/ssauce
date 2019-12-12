@@ -1,18 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Scheduling Execution
-use rstd::prelude::*;
-use runtime_primitives::{
-    traits::{Hash, SimpleArithmetic, Zero},
-    RuntimeDebug,
-};
+use sp_std::prelude::*;
+use sp_runtime::{ traits::Zero, RuntimeDebug };
 use support::{
-    codec::{Decode, Encode},
     decl_event, decl_module, decl_storage,
     dispatch::Result,
     ensure,
     traits::Get,
     StorageDoubleMap, StorageMap, StorageValue,
 };
+use codec::{Encode, Decode};
 use system::ensure_signed;
 
 pub type TaskId = Vec<u8>;
@@ -153,10 +150,11 @@ decl_module! {
             let voters_signal = <SignalBank<T>>::get(current_era, &voter);
             ensure!(voters_signal >= signal, "The voter cannot signal more than the remaining signal");
             if let Some(mut task) = <PendingTasks<T>>::get(id.clone()) {
-                task.score.checked_add(signal).ok_or("task is too popular and signal support overflowed")?;
+                task.score = task.score.checked_add(signal).ok_or("task is too popular and signal support overflowed")?;
+                <PendingTasks<T>>::insert(id.clone(), task);
                 // don't have to checked_sub because just verified that voters_signal >= signal
                 let remaining_signal = voters_signal - signal;
-                <Era>::put(remaining_signal);
+                <SignalBank<T>>::insert(current_era, &voter, remaining_signal);
             } else {
                 return Err("the task did not exist in the PendingTasks storage map");
             }
@@ -177,27 +175,6 @@ impl<T: Trait> Module<T> {
     fn is_on_council(who: &T::AccountId) -> bool {
         Self::council().contains(who)
     }
-
-    /// Naive Execution Estimate
-    ///
-    /// emits an event parameter in `schedule_task` to tell users when
-    /// (which block number), the task is expected to be executed based on when it was submitted
-    /// - iteration makes it quite naive
-    fn naive_execution_estimate(now: T::BlockNumber) -> T::BlockNumber {
-        // the frequency with which tasks are batch executed
-        let batch_frequency = T::ExecutionFrequency::get();
-        let mut expected_execution_time = now;
-        loop {
-            // the expected execution time is the next block number divisible by `ExecutionFrequency`
-            if (expected_execution_time % batch_frequency).is_zero() {
-                break;
-            } else {
-                expected_execution_time += 1.into();
-            }
-        }
-        expected_execution_time
-    }
-
     /// Efficient Execution Estimate
     fn execution_estimate(n: T::BlockNumber) -> T::BlockNumber {
         let batch_frequency = T::ExecutionFrequency::get();
@@ -235,16 +212,19 @@ impl<T: Trait> Module<T> {
 mod tests {
     use crate::*; //{Module, Trait, RawEvent, Task, GenesisConfig};
     use primitives::H256;
-    use runtime_io;
-    use runtime_primitives::{
+    use sp_io;
+    use sp_runtime::{
         testing::Header,
-        traits::{BlakeTwo256, IdentityLookup, OnFinalize, OnInitialize},
+        traits::{BlakeTwo256, IdentityLookup, OnFinalize, OnInitialize, SimpleArithmetic},
         Perbill,
     };
-    // it's ok, just for the testing suit, thread local variables
+
+    // Helper Imports and Methods For Testing Purposes
+    //
+    // rand imports
     use rand::{rngs::OsRng, thread_rng, Rng, RngCore};
     use std::cell::RefCell;
-    use support::{assert_err, impl_outer_event, impl_outer_origin, parameter_types, traits::Get};
+    use support::{impl_outer_event, impl_outer_origin, parameter_types, traits::Get};
     use system::ensure_signed;
 
     // to compare expected storage items with storage items after method calls
@@ -267,12 +247,30 @@ mod tests {
             // intialize with 0, filled full at beginning of next_era
             <SignalBank<T>>::insert(current_era, who, 0u32);
         }
+
+        // Naive Execution Estimate
+        //
+        // emits an event parameter in `schedule_task` to tell users when
+        // (which block number), the task is expected to be executed based on when it was submitted
+        // - iteration makes it quite naive
+        fn naive_execution_estimate(now: T::BlockNumber) -> T::BlockNumber {
+            // the frequency with which tasks are batch executed
+            let batch_frequency = T::ExecutionFrequency::get();
+            let mut expected_execution_time = now;
+            loop {
+                // the expected execution time is the next block number divisible by `ExecutionFrequency`
+                if (expected_execution_time % batch_frequency).is_zero() {
+                    break;
+                } else {
+                    expected_execution_time += 1.into();
+                }
+            }
+            expected_execution_time
+        }
     }
 
-    // to generate random tasks for tests
+    // Random Task Generation for (Future) Testing Purposes
     impl<BlockNumber: std::convert::From<u64>> Task<BlockNumber> {
-        // for testing purposes
-        // - could add expressive generator that ensures monotonically increasing block numbers
         fn random() -> Self {
             let mut rng = thread_rng();
             let random_score: u32 = rng.gen();
@@ -285,7 +283,7 @@ mod tests {
         }
     }
 
-    // to generate random task ids for tests
+    // helper method fo task id generation (see above `random` method)
     pub fn id_generate() -> TaskId {
         let mut buf = vec![0u8; 32];
         OsRng.fill_bytes(&mut buf);
@@ -403,9 +401,9 @@ mod tests {
             EXECUTION_FREQUENCY.with(|v| *v.borrow_mut() = self.execution_frequency);
             TASK_LIMIT.with(|v| *v.borrow_mut() = self.task_limit);
         }
-        pub fn build(self) -> runtime_io::TestExternalities {
+        pub fn build(self) -> sp_io::TestExternalities {
             self.set_associated_consts();
-            let mut t = system::GenesisConfig::default()
+            let t = system::GenesisConfig::default()
                 .build_storage::<TestRuntime>()
                 .unwrap();
             // GenesisConfig::<TestRuntime> {
@@ -439,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn estimators_work() {
+    fn naive_estimator_works() {
         ExtBuilder::default()
             .execution_frequency(8)
             .build()
@@ -466,6 +464,25 @@ mod tests {
     }
 
     #[test]
+    fn estimator_works() {
+        ExtBuilder::default()
+            .execution_frequency(8)
+            .build()
+            .execute_with(|| {
+                let current_block = 5u64;
+                assert_eq!(
+                    TaskScheduler::execution_estimate(current_block.into()),
+                    8u64.into()
+                );
+                let next_block = 67u64;
+                assert_eq!(
+                    TaskScheduler::execution_estimate(next_block.into()),
+                    72u64.into()
+                );
+            })
+    }
+
+    #[test]
     fn schedule_task_behaves() {
         ExtBuilder::default()
             .execution_frequency(10)
@@ -476,7 +493,7 @@ mod tests {
                 assert!(TaskScheduler::is_on_council(&first_account));
                 System::set_block_number(2);
                 let new_task = id_generate();
-                TaskScheduler::schedule_task(Origin::signed(1), new_task.clone());
+                let _ = TaskScheduler::schedule_task(Origin::signed(1), new_task.clone());
 
                 // check storage changes
                 let expected_task: Task<u64> = Task {
@@ -509,20 +526,28 @@ mod tests {
                 let first_account = ensure_signed(Origin::signed(1)).unwrap();
                 let second_account = ensure_signed(Origin::signed(2)).unwrap();
                 let new_task = id_generate();
-                TaskScheduler::add_member(first_account);
-                TaskScheduler::add_member(second_account);
+                let _ = TaskScheduler::add_member(first_account);
+                let _ = TaskScheduler::add_member(second_account);
 
                 // refresh signal_quota
                 run_to_block(7u64);
 
-                TaskScheduler::schedule_task(Origin::signed(2), new_task.clone());
+                let _ = TaskScheduler::schedule_task(Origin::signed(2), new_task.clone());
 
-                TaskScheduler::signal_priority(Origin::signed(1), new_task.clone(), 0u32.into());
+                let _ = TaskScheduler::signal_priority(Origin::signed(1), new_task.clone(), 2u32.into());
 
-                // check storage changes
+                // check that banked signal has decreased
                 assert_eq!(
                     TaskScheduler::signal_bank(1u32, &first_account),
-                    10u32.into()
+                    8u32.into()
+                );
+
+                // check that task priority has increased
+                assert_eq!(
+                    TaskScheduler::pending_tasks(new_task.clone())
+                        .unwrap()
+                        .score,
+                    2u32.into()
                 );
             })
     }

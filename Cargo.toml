@@ -5,6 +5,7 @@ members = [
     "modules/poll",
     "modules/vote",
     "modules/traits",
+    "modules/signal",
     "runtimes/main",
     "runtimes/genesis",
 ]

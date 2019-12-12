@@ -1,31 +1,18 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
-// This file is part of Substrate.
-
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-//! Poll module: Members of a set of account IDs can make their collective feelings known
-//! through dispatched calls from one of two specialised origins.
+//! Poll system: Members of a set of account IDs can make their collective feelings known
+//! through dispatched calls from specialized origins.
 //!
-//! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
-//! function `set_members`, or indirectly, through implementing the `ChangeMembers`
+//! Features (brainstorm):
+//! * uses `governance` trait to implement a default origin s.t. `Origin: From<dyn Governance<Self::AccountId>`
+//! * default instance should have some weighted voting mechanism (1p1v is useless); default should be 1p1pv, but qv should be easy to configure
+//! 
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
 
-use rstd::{prelude::*, result};
+use sp_std::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
-use runtime_primitives::{RuntimeDebug, traits::{Hash, EnsureOrigin}};
+use sp_runtime::RuntimeDebug;
+use sp_runtime::traits::{Hash, EnsureOrigin};
 use support::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
@@ -54,6 +41,10 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 }
 
+/* once this compiles and all the others do with the new syntax,
+* add type to `Trait` for the weighting mechanism for votes `=>` it should be a method that takes in `Signal` and outputs `Weight`
+*/
+
 /// Origin for the collective module.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId, I> {
@@ -62,7 +53,7 @@ pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a single member of the collective.
 	Member(AccountId),
 	/// Dummy to manage the fact we have instancing.
-	_Phantom(rstd::marker::PhantomData<I>),
+	_Phantom(sp_std::marker::PhantomData<I>),
 }
 
 /// Origin for the collective module.
@@ -95,7 +86,7 @@ decl_storage! {
 		pub Members get(fn members): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
-		config(phantom): rstd::marker::PhantomData<I>;
+		config(phantom): sp_std::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
 		build(|config| Module::<T, I>::initialize_members(&config.members))
 	}
@@ -305,7 +296,7 @@ where
 	}
 }
 
-pub struct EnsureMember<AccountId, I=DefaultInstance>(rstd::marker::PhantomData<(AccountId, I)>);
+pub struct EnsureMember<AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(AccountId, I)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 	AccountId,
@@ -320,7 +311,7 @@ impl<
 	}
 }
 
-pub struct EnsureMembers<N: U32, AccountId, I=DefaultInstance>(rstd::marker::PhantomData<(N, AccountId, I)>);
+pub struct EnsureMembers<N: U32, AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(N, AccountId, I)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 	N: U32,
@@ -337,7 +328,7 @@ impl<
 }
 
 pub struct EnsureProportionMoreThan<N: U32, D: U32, AccountId, I=DefaultInstance>(
-	rstd::marker::PhantomData<(N, D, AccountId, I)>
+	sp_std::marker::PhantomData<(N, D, AccountId, I)>
 );
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
@@ -356,7 +347,7 @@ impl<
 }
 
 pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, I=DefaultInstance>(
-	rstd::marker::PhantomData<(N, D, AccountId, I)>
+	sp_std::marker::PhantomData<(N, D, AccountId, I)>
 );
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
