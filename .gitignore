@@ -6,5 +6,5 @@ Cargo.lock
 **/.DS_Store
 
 # temporary, should eventually be removed or added
-specs/
+**/smd.md
 wantlist.md

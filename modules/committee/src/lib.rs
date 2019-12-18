@@ -1,11 +1,8 @@
-//! Poll system: Members of a set of account IDs can make their collective feelings known
-//! through dispatched calls from specialized origins.
+//! Committee
 //!
 //! Features (brainstorm):
-//! * uses `governance` trait to implement a default origin s.t. `Origin: From<dyn Governance<Self::AccountId>`
-//! * default instance should have some weighted voting mechanism (1p1v is useless); default should be 1p1pv, but qv should be easy to configure
+//! (1) default instance should have some weighted voting mechanism (1p1v is useless); default should be 1p1pv, but qv should be easy to configure
 //! 
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
 
@@ -13,7 +10,6 @@ use sp_std::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Hash, EnsureOrigin};
-use support::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
@@ -30,6 +26,17 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
+/// Signal (like a currency for governance power)
+pub type Signal = u32;
+
+/// Weight for each member
+///
+/// This also serves as an aggregate of the membership's `Signal`
+pub type MemberWeight = u32;
+
+// TODO: `SignalToWeightHandler`
+// * add type to `Trait` for the weighting mechanism for votes `=>` it should be a method that takes in `Signal` and outputs `Weight`
+
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
@@ -41,15 +48,17 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 }
 
-/* once this compiles and all the others do with the new syntax,
-* add type to `Trait` for the weighting mechanism for votes `=>` it should be a method that takes in `Signal` and outputs `Weight`
-*/
+// what does `Parameter` and `Dispatchable` do?
+// I would like to somehow govern execution without conforming to these semantics which seem to overprioritize execution within
+// runtime methods `=>` I would rather schedule execution in a relatively dynamic fashion
 
 /// Origin for the collective module.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
+	/// It has been condoned by a certain weight of members of the collective from the total weight
+	Signal(Signal, MemberCount),
 	/// It has been condoned by a single member of the collective.
 	Member(AccountId),
 	/// Dummy to manage the fact we have instancing.
@@ -114,9 +123,6 @@ decl_event!(
 	}
 );
 
-// Note: this module is not benchmarked. The weights are obtained based on the similarity of the
-// executed logic with other democracy function. Note that councillor operations are assigned to the
-// operational class.
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event() = default;
@@ -125,7 +131,6 @@ decl_module! {
 		/// provide it pre-sorted.
 		///
 		/// Requires root origin.
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn set_members(origin, new_members: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			let mut new_members = new_members;
@@ -139,7 +144,6 @@ decl_module! {
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
 		/// Origin must be a member of the collective.
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer not a member");
@@ -149,11 +153,8 @@ decl_module! {
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, ok));
 		}
 
-		/// # <weight>
 		/// - Bounded storage reads and writes.
 		/// - Argument `threshold` has bearing on weight.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(5_000_000)]
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer not a member");
@@ -178,11 +179,6 @@ decl_module! {
 			}
 		}
 
-		/// # <weight>
-		/// - Bounded storage read and writes.
-		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "voter not a member");

@@ -1,11 +1,12 @@
 [workspace]
 members = [
-    "modules/scheduler",
-    "modules/tax",
-    "modules/poll",
-    "modules/vote",
     "modules/traits",
     "modules/signal",
+    "modules/scheduler",
+    "modules/tax",
+    "modules/committee",
+    "modules/haggle",
+    "modules/vote",
     "runtimes/main",
     "runtimes/genesis",
 ]

@@ -1,5 +1,5 @@
 [package]
-name = "poll"
+name = "committee"
 version = "0.0.1"
 authors = ["4meta5"]
 edition = "2018"
