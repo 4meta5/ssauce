@@ -1,30 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Scheduling Execution
-use sp_std::prelude::*;
-use sp_runtime::{ traits::Zero, RuntimeDebug };
+use sp_std::{prelude::*, cmp, result, mem, fmt::Debug};
+use sp_runtime::{ traits::Zero, DispatchResult };
 use support::{
-    decl_event, decl_module, decl_storage,
-    dispatch::Result,
+    decl_event, decl_module, decl_storage, decl_error,
     ensure,
     traits::Get,
     StorageDoubleMap, StorageMap, StorageValue,
 };
-use codec::{Encode, Decode};
 use system::ensure_signed;
+// import task
+mod task;
+use task::Task;
 
 pub type TaskId = Vec<u8>;
 pub type PriorityScore = u32;
 pub type RoundIndex = u32;
-
-#[derive(Encode, Decode, RuntimeDebug)]
-pub struct Task<BlockNumber> {
-    /// A vec of bytes which could be an identifier or a hash corresponding to associated data in IPFS or something
-    id: TaskId,
-    /// The priority of the task relative to other tasks
-    score: PriorityScore,
-    /// The block number at which the task is initially queued
-    proposed_at: BlockNumber,
-}
 
 pub trait Trait: system::Trait {
     /// Overarching event type
@@ -59,12 +50,23 @@ decl_event!(
     }
 );
 
+decl_error! {
+    /// Errors that can occur in my module.
+    pub enum Error for Module<T: Trait> {
+        /// The task does not exist in runtime storage
+        TaskDNEStorage,
+        /// The task score overflowed in the signalling priority method
+        TaskScoreOverflow,
+    }
+}
+
 decl_storage! {
     trait Store for Module<T: Trait> as TaskScheduler {
         /// Outstanding tasks getter
         PendingTasks get(fn pending_tasks): map TaskId => Option<Task<T::BlockNumber>>;
         /// Dispatch queue for task execution
-        ExecutionQueue get(fn execution_queue): Vec<TaskId>;
+        /// TODO: only store TaskId here, sort and reorder
+        ExecutionQueue get(fn execution_queue): Vec<Task<T::BlockNumber>>;
         /// The signalling quota left in terms of `PriorityScore` for all members of the council (until it is killed `on_initialize` on `ExecutionFrequency` blocks)
         SignalBank get(fn signal_bank): double_map RoundIndex, twox_128(T::AccountId) => PriorityScore;
         /// The (closed and static) council of members (anyone can submit tasks but only members can signal priority)
@@ -76,11 +78,13 @@ decl_storage! {
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-        fn deposit_event() = default;
+        type Error = Error<T>;
 
         const SignalQuota: PriorityScore = T::SignalQuota::get();
         const ExecutionFrequency: T::BlockNumber = T::ExecutionFrequency::get();
         const TaskLimit: PriorityScore = T::TaskLimit::get();
+
+        fn deposit_event() = default;
 
         /// On Initialize
         ///
@@ -112,7 +116,7 @@ decl_module! {
         ///
         /// - the task initially has no priority
         /// - only council members can schedule tasks
-        fn schedule_task(origin, data: Vec<u8>) -> Result {
+        fn schedule_task(origin, data: Vec<u8>) {
             let proposer = ensure_signed(origin)?;
             ensure!(Self::is_on_council(&proposer), "only members of the council can schedule tasks");
 
@@ -128,38 +132,20 @@ decl_module! {
             };
             // add tasks as values to map with `TaskId` as the key
             // note: by default overwrites any value stored at the `data.clone()` key
-            <PendingTasks<T>>::insert(data.clone(), task_to_schedule);
+            <PendingTasks<T>>::insert(data.clone(), task_to_schedule.clone());
             // add to TaskQ for scheduled execution
-            <ExecutionQueue>::mutate(|q| q.push(data.clone()));
+            <ExecutionQueue<T>>::append(&[task_to_schedule]);
 
             Self::deposit_event(RawEvent::TaskScheduled(proposer, data, expected_execution));
-            Ok(())
         }
 
         /// Increase Priority for the Task
         ///
         /// - members of the council have limited voting power to increase the priority
         /// of tasks
-        fn signal_priority(origin, id: TaskId, signal: PriorityScore) -> Result {
+        fn signal_priority(origin, id: TaskId, signal: PriorityScore) -> DispatchResult {
             let voter = ensure_signed(origin)?;
-            ensure!(Self::is_on_council(&voter), "The voting member must be on the council");
-
-            // get the current voting era
-            let current_era = <Era>::get();
-            // get the voter's remaining signal in this voting era
-            let voters_signal = <SignalBank<T>>::get(current_era, &voter);
-            ensure!(voters_signal >= signal, "The voter cannot signal more than the remaining signal");
-            if let Some(mut task) = <PendingTasks<T>>::get(id.clone()) {
-                task.score = task.score.checked_add(signal).ok_or("task is too popular and signal support overflowed")?;
-                <PendingTasks<T>>::insert(id.clone(), task);
-                // don't have to checked_sub because just verified that voters_signal >= signal
-                let remaining_signal = voters_signal - signal;
-                <SignalBank<T>>::insert(current_era, &voter, remaining_signal);
-            } else {
-                return Err("the task did not exist in the PendingTasks storage map");
-            }
-            Self::deposit_event(RawEvent::SignalSupport(id, signal));
-            Ok(())
+            Self::do_signal(voter, id, signal)
         }
 
         fn on_finalize(n: T::BlockNumber) {
@@ -170,6 +156,36 @@ decl_module! {
     }
 }
 
+impl<T: Trait> Module<T> {
+    /// Execute Tasks
+    ///
+    /// - exhaustively executes tasks in the order of their priority
+    pub fn execute_tasks(n: T::BlockNumber) {
+        // task limit in terms of priority allowed to be executed every period
+        let mut task_allowance = T::TaskLimit::get();
+        let remove_queue = 6; // vec limited by task_allowance size
+        let mut execution_q = <ExecutionQueue<T>>::get().clone();
+        execution_q.sort_unstable();
+        execution_q.into_iter().for_each(|t| {
+            let task_id = t.id;
+            if let Some(task) = <PendingTasks<T>>::get(&task_id) {
+                if task.score <= task_allowance {
+                    // execute task (could have more express computation here)
+                    // or in off-chain worker running after this block
+                    task_allowance -= task.score;
+                    // could also add a field `cost` instead of score
+                    Self::deposit_event(RawEvent::TaskExecuted(task_id.clone(), n));
+                } else {
+                    // need to explicitly end the loop when a single priority_score > task_allowance (prevent exhaustive execution)
+                    return;
+                }
+            }
+            <PendingTasks<T>>::remove(&task_id);
+        });
+    }
+}
+
+// Private Methods
 impl<T: Trait> Module<T> {
     /// Checks whether the input member is in the council governance body
     fn is_on_council(who: &T::AccountId) -> bool {
@@ -182,29 +198,22 @@ impl<T: Trait> Module<T> {
         n + (batch_frequency - miss)
     }
 
-    /// Execute Tasks
-    ///
-    /// - exhaustively executes tasks in the order of their priority
-    pub fn execute_tasks(n: T::BlockNumber) {
-        // task limit in terms of priority allowed to be executed every period
-        let mut task_allowance = T::TaskLimit::get();
-        let remove_queue = 6; // vec limited by task_allowance size
-        let mut execution_q = <ExecutionQueue>::get().clone();
-        execution_q.sort_unstable();
-        execution_q.into_iter().for_each(|task_id| {
-            if let Some(task) = <PendingTasks<T>>::get(&task_id) {
-                if task.score <= task_allowance {
-                    // execute task (could have more express computation here)
-                    // or in off-chain worker running after this block
-                    task_allowance -= task.score;
-                    Self::deposit_event(RawEvent::TaskExecuted(task.id, n));
-                } else {
-                    // need to explicitly end the loop when a single priority_score > task_allowance (prevent exhaustive execution)
-                    return;
-                }
-            }
-            <PendingTasks<T>>::remove(&task_id);
-        });
+    fn do_signal(voter: T::AccountId, id: TaskId, signal: PriorityScore) -> DispatchResult {
+        ensure!(Self::is_on_council(&voter), "The voting member must be on the council");
+
+        let current_era = <Era>::get();
+        // get voter's remaining signal in this voting era
+        let voters_signal = <SignalBank<T>>::get(current_era, &voter);
+        ensure!(voters_signal >= signal, "The voter cannot signal more than their remaining signal");
+        let mut task = Self::pending_tasks(id.clone()).ok_or(Error::<T>::TaskDNEStorage)?;
+        task.score = task.score.checked_add(signal).ok_or(Error::<T>::TaskScoreOverflow)?;
+        // explicitly write to storage (required!)
+        let _ = <PendingTasks<T>>::insert(id.clone(), task);
+        // no need to checked_sub because verified earlier above that voters_signal >= signal with an `ensure` check
+        let remaining_signal = voters_signal - signal;
+        <SignalBank<T>>::insert(current_era, &voter, remaining_signal);
+        Self::deposit_event(RawEvent::SignalSupport(id, signal));
+        Ok(())
     }
 }
 
@@ -346,6 +355,7 @@ mod tests {
         type MaximumBlockLength = MaximumBlockLength;
         type AvailableBlockRatio = AvailableBlockRatio;
         type Version = ();
+        type ModuleToIndex = ();
     }
 
     mod task_scheduler {
@@ -488,28 +498,31 @@ mod tests {
             .execution_frequency(10)
             .build()
             .execute_with(|| {
-                let first_account = ensure_signed(Origin::signed(1)).unwrap();
+                // this is unsatisfying/unsafe and should be changed
+                let first_account = ensure_signed(Origin::signed(0)).unwrap_or(0);
                 TaskScheduler::add_member(first_account.clone());
                 assert!(TaskScheduler::is_on_council(&first_account));
                 System::set_block_number(2);
-                let new_task = id_generate();
-                let _ = TaskScheduler::schedule_task(Origin::signed(1), new_task.clone());
+                let new_id = id_generate();
+                let _ = TaskScheduler::schedule_task(Origin::signed(1), new_id.clone());
 
                 // check storage changes
                 let expected_task: Task<u64> = Task {
-                    id: new_task.clone(),
+                    id: new_id.clone(),
                     score: 0u32,
                     proposed_at: 2u64,
                 };
+                let task = TaskScheduler::pending_tasks(new_id.clone());
                 assert_eq!(
-                    TaskScheduler::pending_tasks(new_task.clone()).unwrap(),
-                    expected_task
+                    // unwrap is necessary for comparison, but this doesn't check existence (it assumes that)
+                    task,
+                    Some(expected_task)
                 );
-                assert_eq!(TaskScheduler::execution_queue(), vec![new_task.clone()]);
+                assert_eq!(TaskScheduler::execution_queue(), vec![new_id.clone()]);
 
                 // check event behavior
                 let expected_event =
-                    TestEvent::task_scheduler(RawEvent::TaskScheduled(first_account, new_task, 10));
+                    TestEvent::task_scheduler(RawEvent::TaskScheduled(first_account, new_id, 10));
                 assert!(System::events().iter().any(|a| a.event == expected_event));
             })
     }
@@ -523,8 +536,8 @@ mod tests {
             .build()
             .execute_with(|| {
                 System::set_block_number(2u64);
-                let first_account = ensure_signed(Origin::signed(1)).unwrap();
-                let second_account = ensure_signed(Origin::signed(2)).unwrap();
+                let first_account = ensure_signed(Origin::signed(1)).unwrap_or(1);
+                let second_account = ensure_signed(Origin::signed(2)).unwrap_or(2);
                 let new_task = id_generate();
                 let _ = TaskScheduler::add_member(first_account);
                 let _ = TaskScheduler::add_member(second_account);

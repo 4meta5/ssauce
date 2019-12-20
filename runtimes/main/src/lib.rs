@@ -13,13 +13,13 @@ use babe::{AuthorityId as BabeId, SameAuthoritiesForever};
 use grandpa::fg_primitives;
 use grandpa::AuthorityList as GrandpaAuthorityList;
 use primitives::{crypto::key_types, OpaqueMetadata};
-use rstd::prelude::*;
-use sr_api::impl_runtime_apis;
-use sr_primitives::traits::{
+use sp_std::prelude::*;
+use sp_api::impl_runtime_apis;
+use sp_core::traits::{
     BlakeTwo256, Block as BlockT, ConvertInto, NumberFor, StaticLookup, Verify,
 };
-use sr_primitives::weights::Weight;
-use sr_primitives::{
+use sp_runtime::weights::Weight;
+use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
     AnySignature, ApplyResult,
 };
@@ -36,8 +36,8 @@ use vote;
 // A few exports that help ease life for downstream crates.
 pub use balances::Call as BalancesCall;
 #[cfg(any(feature = "std", test))]
-pub use sr_primitives::BuildStorage;
-pub use sr_primitives::{Perbill, Permill};
+pub use sp_runtime::BuildStorage;
+pub use sp_runtime::{Perbill, Permill};
 pub use support::{construct_runtime, parameter_types, traits::Randomness, StorageValue};
 pub use timestamp::Call as TimestampCall;
 
@@ -349,7 +349,7 @@ pub type Executive =
     executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
 impl_runtime_apis! {
-    impl sr_api::Core<Block> for Runtime {
+    impl sp_api::Core<Block> for Runtime {
         fn version() -> RuntimeVersion {
             VERSION
         }
@@ -363,7 +363,7 @@ impl_runtime_apis! {
         }
     }
 
-    impl sr_api::Metadata<Block> for Runtime {
+    impl sp_api::Metadata<Block> for Runtime {
         fn metadata() -> OpaqueMetadata {
             Runtime::metadata().into()
         }
