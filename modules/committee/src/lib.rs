@@ -1,8 +1,8 @@
-//! Committee
-//!
-//! Features (brainstorm):
-//! (1) default instance should have some weighted voting mechanism (1p1v is useless)
-//! ===> default should be 1p1pv, but qv should be easy to configure
+/// Committee
+///
+/// Features (brainstorm):
+/// (1) default instance should have some weighted voting mechanism (1p1v is useless)
+/// ===> default should be 1p1pv, but qv should be easy to configure
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
 

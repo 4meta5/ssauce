@@ -2,34 +2,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use sp_std::prelude::*;
+use sp_std::{prelude::*, result};
 use sp_runtime::{
     traits::{AccountIdConversion, CheckedAdd, CheckedSub, Zero},
-    ModuleId, RuntimeDebug,
+    ModuleId, RuntimeDebug, DispatchError,
 };
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use support::traits::{Currency, ExistenceRequirement::AllowDeath, Get, ReservableCurrency};
-use support::{decl_event, decl_module, decl_storage, dispatch::Result, ensure, StorageValue};
+use support::{decl_event, decl_module, decl_error, decl_storage, ensure, StorageValue};
 use system::{self, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 const MODULE_ID: ModuleId = ModuleId(*b"example ");
-
-pub trait Trait: system::Trait {
-    /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-    /// The currency type for this module
-    type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
-    /// The collateral associated with a transfer
-    type Tax: Get<BalanceOf<Self>>;
-    /// Period between successive batch spends
-    type UserSpend: Get<Self::BlockNumber>;
-    /// Period between successive treasuery spends
-    type TreasurySpend: Get<Self::BlockNumber>;
-    /// Minimum amount of time until a proposal might get approved
-    type MinimumProposalAge: Get<Self::BlockNumber>;
-}
 
 #[derive(Encode, Decode, PartialEq)]
 pub struct SpendRequest<AccountId, Balance> {
@@ -52,6 +37,35 @@ pub struct Proposal<AccountId, Balance, BlockNumber> {
     when: BlockNumber,
     /// Simple support metric
     support: u32,
+}
+
+pub trait Trait: system::Trait {
+    /// The overarching event type.
+    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    /// The currency type for this module
+    type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+    /// The collateral associated with a transfer
+    type Tax: Get<BalanceOf<Self>>;
+    /// Period between successive batch spends
+    type UserSpend: Get<Self::BlockNumber>;
+    /// Period between successive treasuery spends
+    type TreasurySpend: Get<Self::BlockNumber>;
+    /// Minimum amount of time until a proposal might get approved
+    type MinimumProposalAge: Get<Self::BlockNumber>;
+}
+
+decl_error! {
+    pub enum Error for Module<T: Trait> {
+        /// The user debt has overflowed
+        UserDebtOverflowed,
+        /// The user can't afford the tax
+        UserCantAffordTax,
+        /// Not on the council (and tried to invoke some related action)
+        NotOnCouncil,
+        /// The proposal in question was not found upon a storage query 
+        /// - (TODO: should disincentivize failed queries to runtime storage with some conditional fee?)
+        ProposalDNE,
+    }
 }
 
 decl_storage! {
@@ -115,13 +129,13 @@ decl_module! {
             origin,
             dest: T::AccountId,
             amount: BalanceOf<T>
-        ) -> Result {
+        ) -> result::Result<(), DispatchError> {
             let sender = ensure_signed(origin)?;
 
             // the bond calculation could depend on the transfer amount
             let bond = T::Tax::get();
             T::Currency::reserve(&sender, bond)
-                .map_err(|_| "Must be able to pay tax to make transfer")?;
+                .map_err(|_| Error::<T>::UserCantAffordTax)?;
             // error message could print the tax amount
 
             // could add some ensure statement to prevent excessive requests by checking `UserDebt`
@@ -133,7 +147,7 @@ decl_module! {
             };
             <TransferRequests<T>>::append(&[requested_spend])?;
             if let Some(mut new_debt) = <UserDebt<T>>::get(sender.clone()) {
-                new_debt.checked_add(&amount.clone()).ok_or("overflowed upon adding user_debt")?;
+                new_debt.checked_add(&amount.clone()).ok_or(Error::<T>::UserDebtOverflowed)?;
             } else {
                 <UserDebt<T>>::insert(sender.clone(), amount.clone());
             }
@@ -149,9 +163,9 @@ decl_module! {
             origin,
             dest: T::AccountId,
             amount: BalanceOf<T>,
-        ) -> Result {
+        ) -> result::Result<(), DispatchError> {
             let proposer = ensure_signed(origin)?;
-            ensure!(Self::is_on_council(&proposer), "must be on council to make proposal");
+            ensure!(Self::is_on_council(&proposer), Error::<T>::NotOnCouncil);
 
             // <*could add a bond associated with proposals here*>
 
@@ -175,14 +189,16 @@ decl_module! {
         fn stupid_vote(
             origin,
             vote: T::AccountId,
-        ) -> Result {
+        ) -> result::Result<(), DispatchError> {
             let voter = ensure_signed(origin)?;
-            ensure!(Self::is_on_council(&voter), "the voter is on the council");
+            ensure!(Self::is_on_council(&voter), Error::<T>::NotOnCouncil);
             if let Some(mut proposal) = <Proposals<T>>::get(vote) {
+                // could overflow in theory
                 proposal.support += 1;
             } else {
-                return Err("proposal associated with vote does not exist")
+                return Error::<T>::ProposalDNE
             }
+            // returns this if the vote succeeds
             Ok(())
         }
 

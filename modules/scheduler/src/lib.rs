@@ -51,7 +51,6 @@ decl_event!(
 );
 
 decl_error! {
-    /// Errors that can occur in my module.
     pub enum Error for Module<T: Trait> {
         /// The task does not exist in runtime storage
         TaskDNEStorage,
