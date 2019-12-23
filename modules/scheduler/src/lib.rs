@@ -170,7 +170,7 @@ impl<T: Trait> Module<T> {
             let task_id = t.id;
             if let Some(task) = <PendingTasks<T>>::get(&task_id) {
                 if task.score <= task_allowance {
-                    // execute task (could have more express computation here)
+                    // execute task (could have more expressive computation here)
                     // or in off-chain worker running after this block
                     task_allowance -= task.score;
                     // could also add a field `cost` instead of score
