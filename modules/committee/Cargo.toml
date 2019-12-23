@@ -1,5 +1,5 @@
 [package]
-name = "tax"
+name = "committee"
 version = "0.0.1"
 authors = ["4meta5"]
 edition = "2018"
@@ -8,10 +8,10 @@ edition = "2018"
 serde = { version = "1.0.103", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "sp-core", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
-sp-std = { git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
-sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
-sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+sp-core = { package = "sp-core", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+sp-std = { package = "sp-std", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+sp-io = { package = "sp-io", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
+sp-runtime = { package = "sp-runtime", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
 support = { package = "frame-support", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
 system = { package = "frame-system", git = "https://github.com/paritytech/substrate.git", branch = "master", default-features = false }
 
@@ -24,8 +24,8 @@ default = ["std"]
 std = [
 	"safe-mix/std",
 	"codec/std",
-	"primitives/std",
 	"sp-std/std",
+	"sp-core/std",
 	"serde",
 	"sp-io/std",
 	"support/std",

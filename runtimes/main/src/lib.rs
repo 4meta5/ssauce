@@ -13,16 +13,17 @@ use babe::{AuthorityId as BabeId, SameAuthoritiesForever};
 use grandpa::fg_primitives;
 use grandpa::AuthorityList as GrandpaAuthorityList;
 use primitives::{crypto::key_types, OpaqueMetadata};
-use rstd::prelude::*;
-use sr_api::impl_runtime_apis;
-use sr_primitives::traits::{
+use sp_std::prelude::*;
+use sp_api::impl_runtime_apis;
+use sp_core::traits::{
     BlakeTwo256, Block as BlockT, ConvertInto, NumberFor, StaticLookup, Verify,
 };
-use sr_primitives::weights::Weight;
-use sr_primitives::{
+use sp_runtime::weights::Weight;
+use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
     AnySignature, ApplyResult,
 };
+use system::EnsureSignedBy;
 #[cfg(feature = "std")]
 use version::NativeVersion;
 use version::RuntimeVersion;
@@ -30,12 +31,13 @@ use version::RuntimeVersion;
 // The Recipe Modules
 use task_scheduler;
 use transfer_tax;
+use vote;
 
 // A few exports that help ease life for downstream crates.
 pub use balances::Call as BalancesCall;
 #[cfg(any(feature = "std", test))]
-pub use sr_primitives::BuildStorage;
-pub use sr_primitives::{Perbill, Permill};
+pub use sp_runtime::BuildStorage;
+pub use sp_runtime::{Perbill, Permill};
 pub use support::{construct_runtime, parameter_types, traits::Randomness, StorageValue};
 pub use timestamp::Call as TimestampCall;
 
@@ -258,8 +260,8 @@ impl transaction_payment::Trait for Runtime {
 }
 
 // sauce module impls
-parameter_types!{
-    pub const PeriodLength: u64 = 10;
+parameter_types! {
+    pub const PeriodLength: u32 = 10;
     pub const SmallAmount: u32 = 3;
     pub const LargeAmount: u32 = 20;
 }
@@ -279,6 +281,22 @@ impl transfer_tax::Trait for Runtime {
     type TreasurySpend = PeriodLength;
     type MinimumProposalAge = SmallAmount;
 }
+parameter_types! {
+    pub const VotePeriod: u32 = 10;
+    pub const MajorityOrigin: u64 = 1;
+    pub const CancellationOrigin: u64 = 2;
+    pub const WeightOrigin: u64 = 3;
+}
+impl vote::Trait for Runtime {
+    type Event = Event;
+    type Currency = balances::Module<Runtime>;
+    // type Proposal = Call;
+    type Signal = u64;
+    type MajorityOrigin = EnsureSignedBy<MajorityOrigin, u64>;
+    type CancellationOrigin = EnsureSignedBy<CancellationOrigin, u64>;
+    type WeightOrigin = EnsureSignedBy<WeightOrigin, u64>;
+    type VotePeriod = VotePeriod;
+}
 
 construct_runtime!(
 	pub enum Runtime where
@@ -297,7 +315,8 @@ construct_runtime!(
 		TransactionPayment: transaction_payment::{Module, Storage},
 		// Sauce Modules
 		TaskScheduler: task_scheduler::{Module, Call, Storage, Event<T>},
-		TransferTax: transfer_tax::{Module, Call, Storage, Event<T>},
+        TransferTax: transfer_tax::{Module, Call, Storage, Event<T>},
+        Vote: vote::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -320,6 +339,7 @@ pub type SignedExtra = (
     system::CheckWeight<Runtime>,
     transaction_payment::ChargeTransactionPayment<Runtime>,
 );
+
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// Extrinsic type that has already been checked.
@@ -329,7 +349,7 @@ pub type Executive =
     executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
 impl_runtime_apis! {
-    impl sr_api::Core<Block> for Runtime {
+    impl sp_api::Core<Block> for Runtime {
         fn version() -> RuntimeVersion {
             VERSION
         }
@@ -343,7 +363,7 @@ impl_runtime_apis! {
         }
     }
 
-    impl sr_api::Metadata<Block> for Runtime {
+    impl sp_api::Metadata<Block> for Runtime {
         fn metadata() -> OpaqueMetadata {
             Runtime::metadata().into()
         }
