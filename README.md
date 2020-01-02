@@ -1,8 +1,8 @@
-# substrate-sauce
+# substrate sauce
+experiments for extracting specific behavior into modules and extending that behavior in other modules
 
-Inspired by the [srml-tour](https://github.com/JoshOrndorff/srml-tour), the `sauce` intends to walk through minimal mechanism design examples to demonstrate a subset of substrate's features.
+## automated _tax_
+> [transfer-tax](./modules/tax)
 
-* [transfer-tax](./modules/tax)
-* [task-scheduler](./module/scheduler)
-
-*It is intended to be thoroughly tested and, eventually, benchmarked.*
+## runtime task scheduler
+> [task-scheduler](./module/scheduler)
