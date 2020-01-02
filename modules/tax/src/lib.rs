@@ -56,6 +56,8 @@ pub trait Trait: system::Trait {
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
+        /// Unsigned transatcion (a temporary experiment)
+        Unsigned,
         /// The user debt has overflowed
         UserDebtOverflowed,
         /// The user can't afford the tax
@@ -163,7 +165,7 @@ decl_module! {
             origin,
             dest: T::AccountId,
             amount: BalanceOf<T>,
-        ) -> result::Result<(), DispatchError> {
+        ) -> result::Result<(), Error<T>> {
             let proposer = ensure_signed(origin)?;
             ensure!(Self::is_on_council(&proposer), Error::<T>::NotOnCouncil);
 
@@ -189,7 +191,7 @@ decl_module! {
         fn stupid_vote(
             origin,
             vote: T::AccountId,
-        ) -> result::Result<(), DispatchError> {
+        ) -> result::Result<(), Error<T>> {
             let voter = ensure_signed(origin)?;
             ensure!(Self::is_on_council(&voter), Error::<T>::NotOnCouncil);
             if let Some(mut proposal) = <Proposals<T>>::get(vote) {
