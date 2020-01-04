@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use support::traits::{Currency, ExistenceRequirement::AllowDeath, Get, ReservableCurrency};
 use support::{decl_event, decl_module, decl_error, decl_storage, ensure, StorageValue};
 use system::{self, ensure_signed};
-use frunk::Validated;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 const MODULE_ID: ModuleId = ModuleId(*b"example ");
@@ -149,8 +148,9 @@ decl_module! {
                 amount: amount.clone(),
             };
             <TransferRequests<T>>::append(&[requested_spend])?;
-            if let Some(mut new_debt) = <UserDebt<T>>::get(sender.clone()) {
-                new_debt.checked_add(&amount.clone()).ok_or(Error::<T>::UserDebtOverflowed)?;
+            if let Some(debt) = <UserDebt<T>>::get(sender.clone()) {
+                let new_debt = debt.checked_add(&amount.clone()).ok_or(Error::<T>::UserDebtOverflowed)?;
+                <UserDebt<T>>::insert(sender.clone(), new_debt);
             } else {
                 <UserDebt<T>>::insert(sender.clone(), amount.clone());
             }
@@ -199,7 +199,7 @@ decl_module! {
                 // could overflow in theory
                 proposal.support += 1;
             } else {
-                return Err(Error::<T>::ProposalDNE)
+                return Err(Error::<T>::ProposalDNE.into())
             }
             // returns this if the vote succeeds
             Ok(())
@@ -242,8 +242,8 @@ impl<T: Trait> Module<T> {
             // execute the transfer request
             let _ = T::Currency::transfer(&request.from, &request.to, request.amount, AllowDeath);
             // update the UserDebt storage value designed to manage spending requests queue
-            let mut new_debt = <UserDebt<T>>::get(&request.from).expect("the debt is only declared in one method and forgiven in this method; weak qed");
-            new_debt.checked_sub(&request.amount).expect("this amount could not underflow because every call matches the symmetric request in `transfer_request` `=>` > 0 always; qed");
+            let debt = <UserDebt<T>>::get(&request.from).expect("the debt is only declared in one method and forgiven in this method; weak qed");
+            let new_debt = debt.checked_sub(&request.amount).expect("this amount could not underflow because every call matches the symmetric request in `transfer_request` `=>` > 0 always; qed");
             <UserDebt<T>>::insert(&request.from, new_debt);
             // get the tax
             let tax_to_pay = T::Tax::get();
