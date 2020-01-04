@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use support::traits::{Currency, ExistenceRequirement::AllowDeath, Get, ReservableCurrency};
 use support::{decl_event, decl_module, decl_error, decl_storage, ensure, StorageValue};
 use system::{self, ensure_signed};
+use frunk::Validated;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 const MODULE_ID: ModuleId = ModuleId(*b"example ");
@@ -165,7 +166,7 @@ decl_module! {
             origin,
             dest: T::AccountId,
             amount: BalanceOf<T>,
-        ) -> result::Result<(), Error<T>> {
+        ) -> result::Result<(), DispatchError> {
             let proposer = ensure_signed(origin)?;
             ensure!(Self::is_on_council(&proposer), Error::<T>::NotOnCouncil);
 
@@ -191,14 +192,14 @@ decl_module! {
         fn stupid_vote(
             origin,
             vote: T::AccountId,
-        ) -> result::Result<(), Error<T>> {
+        ) -> result::Result<(), DispatchError> {
             let voter = ensure_signed(origin)?;
             ensure!(Self::is_on_council(&voter), Error::<T>::NotOnCouncil);
             if let Some(mut proposal) = <Proposals<T>>::get(vote) {
                 // could overflow in theory
                 proposal.support += 1;
             } else {
-                return Error::<T>::ProposalDNE
+                return Err(Error::<T>::ProposalDNE)
             }
             // returns this if the vote succeeds
             Ok(())
