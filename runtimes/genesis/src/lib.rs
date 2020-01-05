@@ -1,6 +1,6 @@
 use babe_primitives::AuthorityId as BabeId;
 use grandpa_primitives::AuthorityId as GrandpaId;
-use runtime::{
+use main::{
     AccountId, BabeConfig, BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, SudoConfig,
     SystemConfig, WASM_BINARY,
 };
