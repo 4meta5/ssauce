@@ -12,44 +12,45 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 use babe::{AuthorityId as BabeId, SameAuthoritiesForever};
 use grandpa::fg_primitives;
 use grandpa::AuthorityList as GrandpaAuthorityList;
-use primitives::{crypto::key_types, OpaqueMetadata};
+use sp_core::OpaqueMetadata;
 use sp_std::prelude::*;
 use sp_api::impl_runtime_apis;
-use sp_core::traits::{
+use sp_runtime::traits::{
     BlakeTwo256, Block as BlockT, ConvertInto, NumberFor, StaticLookup, Verify,
+    OpaqueKeys, IdentifyAccount,
 };
-use sp_runtime::weights::Weight;
 use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
-    AnySignature, ApplyResult,
+    AnySignature, ApplyExtrinsicResult, MultiSignature,
 };
 use system::EnsureSignedBy;
+use support::weights::Weight;
 #[cfg(feature = "std")]
 use version::NativeVersion;
 use version::RuntimeVersion;
 
 // The Recipe Modules
 use task_scheduler;
-use transfer_tax;
-use vote;
+// use transfer_tax;
+// use vote;
 
 // A few exports that help ease life for downstream crates.
 pub use balances::Call as BalancesCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
-pub use support::{construct_runtime, parameter_types, traits::Randomness, StorageValue};
+pub use support::{construct_runtime, parameter_types, weights::Weights, traits::Randomness, StorageValue};
 pub use timestamp::Call as TimestampCall;
 
 /// An index to a block.
 pub type BlockNumber = u32;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
-pub type Signature = AnySignature;
+pub type Signature = MultiSignature;
 
 /// Some way of identifying an account on the chain. We intentionally make it equivalent
 /// to the public key of our transaction signing scheme.
-pub type AccountId = <Signature as Verify>::Signer;
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 /// The type for looking up accounts. We don't expect more than 4 billion of them, but you
 /// never know...
@@ -62,34 +63,27 @@ pub type Balance = u128;
 pub type Index = u32;
 
 /// A hash of some data used by the chain.
-pub type Hash = primitives::H256;
+pub type Hash = sp_core::H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
-/// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
-/// the specifics of the runtime. They can then be made to be agnostic over specific formats
-/// of data like extrinsics, allowing for them to continue syncing the network through upgrades
-/// to even the core datastructures.
-pub mod opaque {
-    use super::*;
+/// Block header type as expected by this runtime.
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 
-    pub use sr_primitives::OpaqueExtrinsic as UncheckedExtrinsic;
+/// Unchecked extrinsic type as expected by this runtime.
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 
-    /// Opaque block header type.
-    pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-    /// Opaque block type.
-    pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-    /// Opaque block identifier type.
-    pub type BlockId = generic::BlockId<Block>;
+/// Block type as expected by this runtime.
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-    pub type SessionHandlers = (Grandpa, Babe);
+/// BlockId type as expected by this runtime.
+pub type BlockId = generic::BlockId<Block>;
 
-    impl_opaque_keys! {
-        pub struct SessionKeys {
-            pub grandpa: Grandpa,
-            pub babe: Babe,
-        }
+impl_opaque_keys! {
+    pub struct SessionKeys {
+        pub grandpa: Grandpa,
+        pub babe: Babe,
     }
 }
 
@@ -178,6 +172,18 @@ impl system::Trait for Runtime {
     /// Portion of the block weight that is available to all normal transactions.
     type AvailableBlockRatio = AvailableBlockRatio;
     type Version = Version;
+}
+
+impl session::Trait for Runtime {
+	type OnSessionEnding = ();
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type ShouldEndSession = Babe;
+	type Event = Event;
+	type Keys = SessionKeys;
+	type ValidatorId = <Self as system::Trait>::AccountId;
+	type ValidatorIdOf = ();
+	type SelectInitialValidators = ();
+	type DisabledValidatorsThreshold = ();
 }
 
 parameter_types! {
@@ -273,50 +279,51 @@ impl task_scheduler::Trait for Runtime {
     type TaskLimit = LargeAmount;
 }
 
-impl transfer_tax::Trait for Runtime {
-    type Event = Event;
-    type Currency = balances::Module<Runtime>;
-    type Tax = SmallAmount;
-    type UserSpend = PeriodLength;
-    type TreasurySpend = PeriodLength;
-    type MinimumProposalAge = SmallAmount;
-}
-parameter_types! {
-    pub const VotePeriod: u32 = 10;
-    pub const MajorityOrigin: u64 = 1;
-    pub const CancellationOrigin: u64 = 2;
-    pub const WeightOrigin: u64 = 3;
-}
-impl vote::Trait for Runtime {
-    type Event = Event;
-    type Currency = balances::Module<Runtime>;
-    // type Proposal = Call;
-    type Signal = u64;
-    type MajorityOrigin = EnsureSignedBy<MajorityOrigin, u64>;
-    type CancellationOrigin = EnsureSignedBy<CancellationOrigin, u64>;
-    type WeightOrigin = EnsureSignedBy<WeightOrigin, u64>;
-    type VotePeriod = VotePeriod;
-}
+// impl transfer_tax::Trait for Runtime {
+//     type Event = Event;
+//     type Currency = balances::Module<Runtime>;
+//     type Tax = SmallAmount;
+//     type UserSpend = PeriodLength;
+//     type TreasurySpend = PeriodLength;
+//     type MinimumProposalAge = SmallAmount;
+// }
+// parameter_types! {
+//     pub const VotePeriod: u32 = 10;
+//     pub const MajorityOrigin: u64 = 1;
+//     pub const CancellationOrigin: u64 = 2;
+//     pub const WeightOrigin: u64 = 3;
+// }
+// impl vote::Trait for Runtime {
+//     type Event = Event;
+//     type Currency = balances::Module<Runtime>;
+//     // type Proposal = Call;
+//     type Signal = u64;
+//     type MajorityOrigin = EnsureSignedBy<MajorityOrigin, u64>;
+//     type CancellationOrigin = EnsureSignedBy<CancellationOrigin, u64>;
+//     type WeightOrigin = EnsureSignedBy<WeightOrigin, u64>;
+//     type VotePeriod = VotePeriod;
+// }
 
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
-		NodeBlock = opaque::Block,
+		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Babe: babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
-		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
-		Indices: indices::{default, Config<T>},
+        Grandpa: grandpa::{Module, Call, Storage, Config, Event},
+        Session: session::{Module, Call, Storage, Event, Config<T>},
+		Indices: indices,
 		Balances: balances::{default, Error},
 		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 		Sudo: sudo,
 		TransactionPayment: transaction_payment::{Module, Storage},
 		// Sauce Modules
 		TaskScheduler: task_scheduler::{Module, Call, Storage, Event<T>},
-        TransferTax: transfer_tax::{Module, Call, Storage, Event<T>},
-        Vote: vote::{Module, Call, Storage, Event<T>},
+        // TransferTax: transfer_tax::{Module, Call, Storage, Event<T>},
+        // Vote: vote::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -369,8 +376,8 @@ impl_runtime_apis! {
         }
     }
 
-    impl block_builder_api::BlockBuilder<Block> for Runtime {
-        fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+    impl sp_block_builder::BlockBuilder<Block> for Runtime {
+        fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
             Executive::apply_extrinsic(extrinsic)
         }
 
@@ -378,14 +385,14 @@ impl_runtime_apis! {
             Executive::finalize_block()
         }
 
-        fn inherent_extrinsics(data: inherents::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+        fn inherent_extrinsics(data: sp_inherents::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
             data.create_extrinsics()
         }
 
         fn check_inherents(
             block: Block,
-            data: inherents::InherentData
-        ) -> inherents::CheckInherentsResult {
+            data: sp_inherents::InherentData
+        ) -> sp_inherents::CheckInherentsResult {
             data.check_extrinsics(&block)
         }
 
@@ -430,9 +437,9 @@ impl_runtime_apis! {
         }
     }
 
-    impl substrate_session::SessionKeys<Block> for Runtime {
+    impl session::SessionKeys<Block> for Runtime {
         fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-            opaque::SessionKeys::generate(seed)
+            SessionKeys::generate(seed)
         }
     }
 }
